@@ -11,16 +11,23 @@ const ffmpeg = require('fluent-ffmpeg');
 // Tell the server what port it should use. 4001 is for testing purposes
 const PORT = parseInt(process.env.PORT) || 4001;
 
+// Require our core modules
+const { Util } = require("./core");
+
 // Maybe use the public directory for files?
 // app.use('/', express.static(path.join(__dirname, 'video_database')));
 
 // TODO: THIS DOESN'T ACTUALLY WORK LIKE I WANT IT TO
-//  - Add some sort of manifest like .m3u8 and partition videos into .ts
+//  - Make a parser for .m3u8 files
+//  - Connect to video stream segmenter made by Apple
+//  - Child Processes?????
+//  - ???
+//  - Profit
 
 // RESPONSES AND REQUESTS
 
 // Respond to GET requests for video
-app.get('/:id', function (req, res){
+app.get('/live/:id', function (req, res){
     // Import the video name (safe tho)
     let videoName = req.params.id.replace(/([^0-9])+/, '');
     // If the video requested wasn't just numbers then reply with not found
@@ -28,10 +35,13 @@ app.get('/:id', function (req, res){
         res.send("Video with id: " + req.params.id + " was not found");
         return;
     }
+
     // Create the read stream
+    // This should be a m3u8 file later
     let file = fs.createReadStream(path.join(__dirname, 'video_database') + "/" + videoName + "-VOD.mp4");
 
     // Set the content to mp4
+    // Change this to application/vnd.apple.mpegurl or do some sort of procedural switch or something
     res.set('content-type', 'video/mp4');
 
     // Send the data in chunks
@@ -42,16 +52,16 @@ app.get('/:id', function (req, res){
     // In the event of an error with the video read just send a 404
     file.on("error", function (err){
         res.status(404).json({ message: "Stream was not found" });
-    })
+    });
 
     // On end end
     file.on("end", function (){
         res.end();
-    })
+    });
 });
 
 // Home page request
-app.post('/:id', function (req, res){
+app.post('/upload/:id', function (req, res){
     // Import the video name (safe tho)
     let videoName = req.params.id.replace(/([^0-9])+/, '');
     // Create the output file (the final VOD)
@@ -59,6 +69,10 @@ app.post('/:id', function (req, res){
     // Define the video chunks it should save as
     let videoChunkCount = 0;
     let videoChunk = "";
+    // Define the options to write chunk
+    let chunkWriteOption = {
+        path: path.join(__dirname, 'video_database') + "/" + videoName
+    }
     // Receive the data chunks
     req.on('data', chunk => {
         // Add the chunk to the video chunk
@@ -69,22 +83,27 @@ app.post('/:id', function (req, res){
             // Add 1 to the chunk count
             videoChunkCount++;
             // Write the chunk to disk
-            fs.writeFile(path.join(__dirname, 'video_database') + "/" + videoName + videoChunkCount + ".ts", videoChunk, function (err){
+            // TODO: Pass the chunk to the segmenter from apple
+            Util.writeVideoChunk(videoChunk, videoChunkCount, chunkWriteOption, function (err){
                 if (err) console.error(err);
             });
+            // * Debug
+            console.log("-> Video Chunk received: " + videoChunk.length);
             // Reset the video chunk
             videoChunk = "";
         }
         // Write the video chunk into the output stream
         file.write(chunk);
+        // Send code saying everything is ok
+        res.status(200);
     });
     req.on('end', () => {
         // Log that there was a stream and it finished
         console.log("Data stream finished:" + PORT);
+        // Close the write of the output stream (making a VOD)
+        file.end();
         // Write the last video chunk
-        fs.writeFile(path.join(__dirname, 'video_database') + "/" + videoName + videoChunkCount + ".ts", videoChunk, function (err){
-            // Close the write of the output stream (making a VOD)
-            file.end();
+        Util.writeVideoChunk(videoChunk, videoChunkCount, chunkWriteOption,function (err){
             // Check if there was an error with the last packet and respond accordingly
             if (err) {
                 console.error(err);
