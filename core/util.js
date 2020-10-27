@@ -2,8 +2,6 @@ const fs = require("fs");
 
 Util = {}
 
-// TODO: Make this some kind of object that also writes a m3u8 file
-
 /**
  * @callback writeChunkCallback
  * @param {ErrnoException|null} err
@@ -40,6 +38,64 @@ Util.getValue = function (string){
 }
 
 /**
+ * @typedef {Object} Conveyor
+ * @property {number} Capacity
+ * @property {*[]} Items
+ * @property {number} Count
+ */
+class Conveyor {
+    /**
+     * Creates a Conveyor with the max capacity given
+     * @param {number} capacity
+     */
+    constructor(capacity) {
+        this.Capacity = capacity;
+        this.Items = [];
+        this.Count = 0;
+    }
+
+    /**
+     * Adds an element to the conveyor
+     * @param {*} element
+     * @return {Conveyor}
+     * @constructor
+     */
+    Add(element){
+        this.items[this.count++] = element;
+        if (this.count > this.capacity) this.items.shift();
+        return this;
+    }
+
+    /**
+     * Returns the first value on the conveyor
+     * @return {*}
+     * @constructor
+     */
+    Next(){
+        return this.items[this.count];
+    }
+
+    /**
+     * Removes items to ensure a new capacity of the conveyor.
+     * @param {number} newCapacity
+     * @return {*[]} - an array with the removed items
+     * @constructor
+     */
+    EnsureCapacity(newCapacity){
+        // Set the new capacity
+        this.capacity = newCapacity;
+        // Define the return array
+        let removedItems = [];
+        // Remove each item until the new capacity is achieved
+        while (this.items.length > this.capacity){
+            removedItems.push(this.items.shift());
+        }
+        // Return the removed items
+        return removedItems;
+    }
+}
+
+/**
  * @typedef PlaylistParser
  * @property {SimpleMediaPlaylist} Playlist - the current playlist that will be parsed and unparsed
  */
@@ -73,26 +129,7 @@ class PlaylistParser {
      * @return {string} - A stringified mess
      */
     toString(){
-        let s = '';
-        s += "#EXTM3U\n";
-        s += "#EXT-X-TARGETDURATION:" + this.Playlist.TargetDuration + "\n";
-        s += "#EXT-X-VERSION:" + this.Playlist.Version + "\n"
-        s += "#EXT-X-MEDIA-SEQUENCE" + this.Playlist.MediaSequenceNumber + "\n";
-        // Add each segment to the string but start on the Media Sequence Number to skip the ones the user doesn't need
-        for (let i = this.Playlist.MediaSequenceNumber; i > this.Playlist.Segments.length; i++){
-            let segment = this.Playlist.Segments[i];
-            s += segment.toString() + "\n";
-        }
-        // If there is no Preload Hints then return early
-        if (!this.Playlist.PreloadHints.size > 0) return s.toString();
-        // Add each preload hint
-        this.Playlist.PreloadHints.forEach(((type, value) => {
-            s += type + "=" + value + ",";
-        }));
-        // Delete the last ","
-        s = s.slice(0,-1);
-        // Return the stringified mess
-        return s.toString();
+        return this.Playlist.toString();
     }
 
     /**
@@ -208,7 +245,6 @@ class SimpleMediaPlaylist {
     /**
      * Adds a segment to the playlist
      * @param {SimpleSegment} segment
-     * @returns {SimpleMediaPlaylist}
      */
     AddSimpleSegment(segment) {
         this.Segments.push(segment);
@@ -218,7 +254,34 @@ class SimpleMediaPlaylist {
             this.PartTargetDuration = segment.Duration;
         // Increment the max parts index
         this.MaxPartIndex++;
-        return this;
+    }
+
+
+    /**w
+     * Builds a m3u8 formatted playlist and returns it
+     * @return {string} - A stringified mess
+     */
+    toString(){
+        let s = '';
+        s += "#EXTM3U\n";
+        s += "#EXT-X-TARGETDURATION:" + this.TargetDuration + "\n";
+        s += "#EXT-X-VERSION:" + this.Version + "\n"
+        s += "#EXT-X-MEDIA-SEQUENCE" + this.MediaSequenceNumber + "\n";
+        // Add each segment to the string but start on the Media Sequence Number to skip the ones the user doesn't need
+        for (let i = this.MediaSequenceNumber; i > this.Segments.length; i++){
+            let segment = this.Segments[i];
+            s += segment.toString() + "\n";
+        }
+        // If there is no Preload Hints then return early
+        if (!this.PreloadHints.size > 0) return s.toString();
+        // Add each preload hint
+        this.PreloadHints.forEach(((type, value) => {
+            s += type + "=" + value + ",";
+        }));
+        // Delete the last ","
+        s = s.slice(0,-1);
+        // Return the stringified mess
+        return s.toString();
     }
 }
 

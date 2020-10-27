@@ -18,8 +18,8 @@ const { Util } = require("./core");
 // app.use('/', express.static(path.join(__dirname, 'video_database')));
 
 // TODO: THIS DOESN'T ACTUALLY WORK LIKE I WANT IT TO
-//  - Make a parser for .m3u8 files
-//  - Connect to video stream segmenter made by Apple
+//  X Make a parser for .m3u8 files
+//  - Connect to video stream segmenter made by Apple or FFmpeg
 //  - Child Processes?????
 //  - ???
 //  - Profit
