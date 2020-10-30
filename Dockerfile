@@ -1,17 +1,14 @@
-FROM node:10.5.0
+FROM node:latest
 
-# Install ffmpeg
-RUN set -x \
-    && add-apt-repository ppa:mc3man/trusty-media \
-    && apt-get update \
-    && apt-get dist-upgrade \
-    && apt-get install -y --no-install-recommends \
-        ffmpeg
-
-ARG PORT
+ARG PORT=4001
 ENV PORT=$PORT
 
 WORKDIR /app
+
+# Install ffmpeg
+#COPY ffmpeg_setup.sh /app
+#RUN /app/ffmpeg_setup.sh
+
 COPY package.json .
 RUN npm install
 COPY main.js .
