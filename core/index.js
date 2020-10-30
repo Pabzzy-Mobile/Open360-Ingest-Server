@@ -1,3 +1,4 @@
 module.exports = {
-    Util: require("./util.js")
+    Util: require("./util.js"),
+    CommandParser: require("./commandparser.js")
 }

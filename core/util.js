@@ -1,7 +1,5 @@
 const fs = require("fs");
 
-Util = {}
-
 /**
  * @callback writeChunkCallback
  * @param {ErrnoException|null} err
@@ -15,7 +13,7 @@ Util = {}
  * @param {string} options.path
  * @param {writeChunkCallback} callback
  */
-Util.writeVideoChunk = function (videoChunk, videoChunkCount, options, callback){
+let writeVideoChunk = function (videoChunk, videoChunkCount, options, callback){
     fs.writeFile(options.path + "_" + videoChunkCount + ".ts", videoChunk, callback);
 }
 
@@ -24,7 +22,7 @@ Util.writeVideoChunk = function (videoChunk, videoChunkCount, options, callback)
  * @param {string} string
  * @return {string[]}
  */
-Util.diceUp = function (string){
+let diceUp = function (string){
     return string.split("\n");
 }
 
@@ -33,12 +31,144 @@ Util.diceUp = function (string){
  * @param {string} string
  * @return {string}
  */
-Util.getValue = function (string){
+let getValue = function (string){
     return string.substring(string.indexOf(":"))
 }
 
 /**
- * @typedef {Object} Conveyor
+ * Generates a random string of the desired length
+ * @param length
+ * @return {string}
+ */
+let generateString = function (length){
+    let characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    return generateSet(length, characters)
+}
+
+/**
+ * Generates a random string of the desired length
+ * @param length
+ * @return {string}
+ */
+let generateNumber = function (length){
+    let characters = "0123456789";
+    return Util.generateSet(length, characters)
+}
+
+/**
+ * Generates a random string of characters from a set
+ * @param {number} length
+ * @param {string} set - string defining what the output string will be composed of
+ * @return {string}
+ */
+let generateSet = function (length, set){
+    let result           = '';
+    let setLength = set.length;
+    for ( let i = 0; i < length; i++ ) {
+        result += set.charAt(Math.floor(Math.random() * setLength));
+    }
+    return result;
+}
+
+/**
+ * @type {Object} GrowList
+ * @property {number} Capacity
+ * @property {*[]} Items
+ * @property {number} Count
+ */
+class GrowList {
+    /**
+     * Creates a GrowList with the starting capacity given
+     * @param {number} capacity
+     */
+    constructor(capacity) {
+        this.Capacity = capacity;
+        this.Items = [];
+        this.Count = 0;
+    }
+
+    /**
+     * Adds an element to the list
+     * @param {*} element
+     * @return {GrowList}
+     */
+    Add(element){
+        this.items[this.count++] = element;
+        return this;
+    }
+
+    /**
+     * Removes the first items on a list to ensure the size
+     * @param {number} newCapacity
+     * @return {*[]} - an array with the removed items
+     */
+    EnsureCapacity(newCapacity){
+        // Set the new capacity
+        this.capacity = newCapacity;
+        // Define the return array
+        let removedItems = [];
+        // Remove each item until the new capacity is achieved
+        while (this.items.length > this.capacity){
+            removedItems.push(this.items.shift());
+        }
+        // Return the removed items
+        return removedItems;
+    }
+}
+
+/**
+ * @type {Object} FixedList
+ * @property {number} Capacity
+ * @property {*[]} Items
+ * @property {number} Count
+ */
+class FixedList {
+    /**
+     * Creates a FixedList with the max capacity given
+     * @param {number} capacity
+     */
+    constructor(capacity) {
+        this.Capacity = capacity;
+        this.Items = [];
+        this.Count = 0;
+    }
+
+    /**
+     * Adds an element to the list
+     * @param {*} element
+     * @return {boolean}
+     */
+    Add(element){
+        if (this.isFull()) return false;
+        this.items[this.count++] = element;
+        return true
+    }
+
+    isFull(){
+        return this.Count > this.Capacity
+    }
+
+    /**
+     * Removes the first items on a list to ensure the size
+     * @param {number} newCapacity
+     * @return {*[]} - an array with the removed items
+     */
+    EnsureCapacity(newCapacity){
+        // Set the new capacity
+        this.capacity = newCapacity;
+        // Define the return array
+        let removedItems = [];
+        // Remove each item until the new capacity is achieved
+        while (this.items.length > this.capacity){
+            removedItems.push(this.items.shift());
+        }
+        // Return the removed items
+        return removedItems;
+    }
+}
+
+/**
+ * @type {Object} Conveyor
  * @property {number} Capacity
  * @property {*[]} Items
  * @property {number} Count
@@ -58,7 +188,6 @@ class Conveyor {
      * Adds an element to the conveyor
      * @param {*} element
      * @return {Conveyor}
-     * @constructor
      */
     Add(element){
         this.items[this.count++] = element;
@@ -69,7 +198,6 @@ class Conveyor {
     /**
      * Returns the first value on the conveyor
      * @return {*}
-     * @constructor
      */
     Next(){
         return this.items[this.count];
@@ -79,7 +207,6 @@ class Conveyor {
      * Removes items to ensure a new capacity of the conveyor.
      * @param {number} newCapacity
      * @return {*[]} - an array with the removed items
-     * @constructor
      */
     EnsureCapacity(newCapacity){
         // Set the new capacity
@@ -96,7 +223,7 @@ class Conveyor {
 }
 
 /**
- * @typedef PlaylistParser
+ * @type PlaylistParser
  * @property {SimpleMediaPlaylist} Playlist - the current playlist that will be parsed and unparsed
  */
 
@@ -213,7 +340,7 @@ class PlaylistParser {
 }
 
 /**
- * @typedef {Object} SimpleMediaPlaylist - Describes the information of a m3u8 playlist file
+ * @type {Object} SimpleMediaPlaylist - Describes the information of a m3u8 playlist file
  * @property {number} TargetDuration - Target duration of the full playlist
  * @property {number} Version - Version of the format
  * @property {number} PartTargetDuration - Target duration of each segment
@@ -286,7 +413,7 @@ class SimpleMediaPlaylist {
 }
 
 /**
- * @typedef {Object} SimpleSegment
+ * @type {Object} SimpleSegment
  * @property {number} Duration - Target duration of this segment
  * @property {string} URI - The URI of the file of this segment
  * @property {string[]} ExtraLines - Any extra lines that should be bundled with this segment
@@ -317,7 +444,7 @@ class SimpleSegment {
 }
 
 /**
- * @typedef {Object} FullSegment
+ * @type {Object} FullSegment
  * @property {SimpleSegment} Self - A reference to the first or only segment
  * @property {SimpleSegment[]} Parts - An array of the segments that make this segment whole
  */
@@ -333,4 +460,18 @@ class FullSegment {
     }
 }
 
-module.exports = Util;
+module.exports = {
+    writeVideoChunk,
+    diceUp,
+    generateNumber,
+    generateString,
+    getValue,
+    generateSet,
+    GrowList,
+    FixedList,
+    Conveyor,
+    SimpleMediaPlaylist,
+    SimpleSegment,
+    PlaylistParser,
+    FullSegment
+};

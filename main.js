@@ -5,14 +5,14 @@ const fs = require('fs');
 const express = require("express");
 const app = express();
 const http = require('http').createServer(app);
-// For video encoding
-const ffmpeg = require('fluent-ffmpeg');
+// Child process manager
+const execa = require('execa');
 
 // Tell the server what port it should use. 4001 is for testing purposes
 const PORT = parseInt(process.env.PORT) || 4001;
 
 // Require our core modules
-const { Util } = require("./core");
+const { Util, CommandParser } = require("./core");
 
 // Maybe use the public directory for files?
 // app.use('/', express.static(path.join(__dirname, 'video_database')));
