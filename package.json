@@ -18,9 +18,7 @@
   },
   "homepage": "https://github.com/Pabzzy-Mobile/Open360-Ingest-Server#readme",
   "dependencies": {
-    "body-parser": "^1.19.0",
     "express": "^4.17.1",
-    "fluent-ffmpeg": "^2.1.2",
-    "sanitize": "^2.1.0"
+    "execa": "^4.1.0"
   }
 }
