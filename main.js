@@ -77,9 +77,9 @@ app.post('/upload/:id', function (req, res){
     req.on('data', chunk => {
         // Add the chunk to the video chunk
         videoChunk += chunk.toString();
-        // If the video chunk is over 1.2M of length, whatever 1.2M is
+        // If the video chunk is over 6k of length, whatever 1.2M is
         // (I just picked a random number, it seems to be around 3.2MB)
-        if (videoChunk.length > 1200000){
+        if (videoChunk.length > 6000){
             // Add 1 to the chunk count
             videoChunkCount++;
             // Write the chunk to disk
@@ -120,7 +120,9 @@ app.listen(PORT, function (){
     // Check if video_database exists or make one
     let databaseExists = fs.existsSync(path.join(__dirname, 'video_database'));
 
-    if (!databaseExists) { fs.mkdirSync(path.join(__dirname, 'video_database'))};
+    if (!databaseExists) {
+        fs.mkdirSync(path.join(__dirname, 'video_database'));
+    }
 
     console.info("Listening on: " + PORT);
 });

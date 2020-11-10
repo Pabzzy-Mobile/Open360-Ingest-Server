@@ -1,19 +1,17 @@
-FROM node:latest
+FROM node:15.0.1-alpine3.12
 
 ARG PORT=4001
 ENV PORT=$PORT
 
 WORKDIR /app
 
-# Install ffmpeg
-#COPY ffmpeg_setup.sh /app
-#RUN /app/ffmpeg_setup.sh
-
 COPY package.json .
 RUN npm install
 COPY main.js .
 COPY core ./core
 COPY config ./config
+# Copy ffmpeg
+COPY ffmpeg ./ffmpeg
 
 EXPOSE $PORT
 
