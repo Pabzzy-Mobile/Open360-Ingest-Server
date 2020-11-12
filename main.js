@@ -1,4 +1,5 @@
 const NodeMediaServer = require('node-media-server');
+const http = require('http');
 const fs = require("fs");
 
 // Load the config
@@ -8,10 +9,12 @@ const {Util} = require("./core/");
 let nms = new NodeMediaServer(config);
 
 fs.mkdir("./video_database/live", {recursive: true}, (err) => {
-    console.error(err);
+    if (err)
+        console.error(err);
 });
 fs.mkdir("./video_database/video", {recursive: true}, (err) => {
-    console.error(err);
+    if (err)
+        console.error(err);
 });
 
 nms.run();
@@ -41,17 +44,33 @@ nms.on('doneConnect', (id, args) => {
 nms.on('prePublish', (id, streamPath, args) => {
     let streamKey = getStreamKeyFromStreamPath(streamPath);
     console.log('[NodeEvent on prePublish]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
-    generateStreamThumbnail(streamKey);
 
     let session = nms.getSession(id);
+
+    requestCheckStreamKeyExist(streamKey)
+        .then((resp) => {
+            let exists = resp.result;
+            console.log('[NodeEvent on prePublish]', "Stream Key: ", exists ? "authorized" : "rejected");
+            if (!exists){
+                session.reject();
+            } else {
+                // Key is real and so do some stuff
+                sendChannelLivePOST(streamKey, true);
+            }
+        })
+        .catch((err) => {
+            console.error(err);
+            session.reject();
+        })
 
     // INFO
     // this is where the stream key verification should be
     // also the path rerouting for the database
-    console.log(session);
-    console.log(session.publishStreamPath);
+    //console.log(session);
+    //console.log(session.publishStreamPath);
     // let session = nms.getSession(id);
     // session.reject();
+    generateStreamThumbnail(streamKey);
 });
 
 nms.on('postPublish', (id, streamPath, args) => {
@@ -65,6 +84,7 @@ nms.on('donePublish', (id, streamPath, args) => {
     Util.makeVOD(streamKey)
         .then(() => {
             console.log("[NodeEvent on donePublish]", `id=${id}`, "VOD saved");
+            sendChannelLivePOST(streamKey, false);
         });
 });
 
@@ -105,3 +125,82 @@ const generateStreamThumbnail = (streamKey) => {
         stdio: 'ignore'
     }).unref();
 };
+
+/**
+ * @param {string} streamKey
+ * @return {Promise<Object>}
+ */
+let requestCheckStreamKeyExist = function (streamKey) {
+    return new Promise((resolve, reject) => {
+        let data = JSON.stringify({streamKey: streamKey});
+
+        let options = {
+            hostname: 'open-360-web-server',
+            port: 80,
+            path: '/auth/skc',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': data.length
+            }
+        }
+
+        let request = http.request(options, res => {
+            let body = '';
+
+            res.on('data', resp => {
+                body += resp;
+            });
+
+            res.on('end', () => {
+                //let resp = resp
+                resolve(JSON.parse(body));
+            });
+        });
+
+        request.on('error',err => {
+            console.log("Could not connect to the web server");
+            reject(err);
+        });
+
+        request.write(data);
+        request.end();
+    });
+}
+
+let sendChannelLivePOST = function (streamKey, online) {
+    return new Promise((resolve, reject) => {
+        let data = JSON.stringify({streamKey: streamKey, online: online});
+
+        let options = {
+            hostname: 'open-360-web-server',
+            port: 80,
+            path: '/video/skso',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': data.length
+            }
+        }
+
+        let request = http.request(options, res => {
+            let body = '';
+
+            res.on('data', resp => {
+                body += resp;
+            });
+
+            res.on('end', () => {
+                resolve(JSON.parse(body));
+            });
+        });
+
+        request.on('error',err => {
+            console.log("Could not connect to the web server");
+            reject(err);
+        });
+
+        request.write(data);
+        request.end();
+    });
+}
