@@ -23,4 +23,5 @@ services:
 
 networks:
   ingest-network:
-    name: "ingest-network"
+    external: true
+    name: "open360-ingest-network"
