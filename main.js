@@ -1,126 +1,206 @@
-// General Utility modules
-const path = require('path');
-const fs = require('fs');
-// For the HTTP server
-const express = require("express");
-const app = express();
-const http = require('http').createServer(app);
-// Child process manager
-const execa = require('execa');
+const NodeMediaServer = require('node-media-server');
+const http = require('http');
+const fs = require("fs");
 
-// Tell the server what port it should use. 4001 is for testing purposes
-const PORT = parseInt(process.env.PORT) || 4001;
+// Load the config
+const config = require('./config/default.json');
+const {Util} = require("./core/");
 
-// Require our core modules
-const { Util, CommandParser } = require("./core");
+let nms = new NodeMediaServer(config);
 
-// Maybe use the public directory for files?
-// app.use('/', express.static(path.join(__dirname, 'video_database')));
-
-// TODO: THIS DOESN'T ACTUALLY WORK LIKE I WANT IT TO
-//  X Make a parser for .m3u8 files
-//  - Connect to video stream segmenter made by Apple or FFmpeg
-//  - Child Processes?????
-//  - ???
-//  - Profit
-
-// RESPONSES AND REQUESTS
-
-// Respond to GET requests for video
-app.get('/live/:id', function (req, res){
-    // Import the video name (safe tho)
-    let videoName = req.params.id.replace(/([^0-9])+/, '');
-    // If the video requested wasn't just numbers then reply with not found
-    if (videoName !== req.params.id) {
-        res.send("Video with id: " + req.params.id + " was not found");
-        return;
-    }
-
-    // Create the read stream
-    // This should be a m3u8 file later
-    let file = fs.createReadStream(path.join(__dirname, 'video_database') + "/" + videoName + "-VOD.mp4");
-
-    // Set the content to mp4
-    // Change this to application/vnd.apple.mpegurl or do some sort of procedural switch or something
-    res.set('content-type', 'video/mp4');
-
-    // Send the data in chunks
-    file.on('data', function (chunk){
-        res.write(chunk);
-    });
-
-    // In the event of an error with the video read just send a 404
-    file.on("error", function (err){
-        res.status(404).json({ message: "Stream was not found" });
-    });
-
-    // On end end
-    file.on("end", function (){
-        res.end();
-    });
+fs.mkdir("./video_database/live", {recursive: true}, (err) => {
+    if (err)
+        console.error(err);
+});
+fs.mkdir("./video_database/video", {recursive: true}, (err) => {
+    if (err)
+        console.error(err);
 });
 
-// Home page request
-app.post('/upload/:id', function (req, res){
-    // Import the video name (safe tho)
-    let videoName = req.params.id.replace(/([^0-9])+/, '');
-    // Create the output file (the final VOD)
-    let file = fs.createWriteStream(path.join(__dirname, 'video_database') + "/" + videoName + "-VOD.mp4");
-    // Define the video chunks it should save as
-    let videoChunkCount = 0;
-    let videoChunk = "";
-    // Define the options to write chunk
-    let chunkWriteOption = {
-        path: path.join(__dirname, 'video_database') + "/" + videoName
-    }
-    // Receive the data chunks
-    req.on('data', chunk => {
-        // Add the chunk to the video chunk
-        videoChunk += chunk.toString();
-        // If the video chunk is over 1.2M of length, whatever 1.2M is
-        // (I just picked a random number, it seems to be around 3.2MB)
-        if (videoChunk.length > 1200000){
-            // Add 1 to the chunk count
-            videoChunkCount++;
-            // Write the chunk to disk
-            // TODO: Pass the chunk to the segmenter from apple
-            Util.writeVideoChunk(videoChunk, videoChunkCount, chunkWriteOption, function (err){
-                if (err) console.error(err);
-            });
-            // * Debug
-            console.log("-> Video Chunk received: " + videoChunk.length);
-            // Reset the video chunk
-            videoChunk = "";
-        }
-        // Write the video chunk into the output stream
-        file.write(chunk);
-        // Send code saying everything is ok
-        res.status(200);
-    });
-    req.on('end', () => {
-        // Log that there was a stream and it finished
-        console.log("Data stream finished:" + PORT);
-        // Close the write of the output stream (making a VOD)
-        file.end();
-        // Write the last video chunk
-        Util.writeVideoChunk(videoChunk, videoChunkCount, chunkWriteOption,function (err){
-            // Check if there was an error with the last packet and respond accordingly
-            if (err) {
-                console.error(err);
-                res.status(500).json({ message: "Stream was not saved as a VOD"});
+nms.run();
+
+/*
+TODO LIST
+    - Unique Stream keys
+    - Verify Stream keys with the web server
+    - Shared Stream key database
+    - Fix thumbnails
+ */
+
+nms.on('preConnect', (id, args) => {
+    console.log('[NodeEvent on preConnect]', `id=${id} args=${JSON.stringify(args)}`);
+    // let session = nms.getSession(id);
+    // session.reject();
+});
+
+nms.on('postConnect', (id, args) => {
+    console.log('[NodeEvent on postConnect]', `id=${id} args=${JSON.stringify(args)}`);
+});
+
+nms.on('doneConnect', (id, args) => {
+    console.log('[NodeEvent on doneConnect]', `id=${id} args=${JSON.stringify(args)}`);
+});
+
+nms.on('prePublish', (id, streamPath, args) => {
+    let streamKey = getStreamKeyFromStreamPath(streamPath);
+    console.log('[NodeEvent on prePublish]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
+
+    let session = nms.getSession(id);
+
+    requestCheckStreamKeyExist(streamKey)
+        .then((resp) => {
+            let exists = resp.result;
+            console.log('[NodeEvent on prePublish]', "Stream Key: ", exists ? "authorized" : "rejected");
+            if (!exists){
+                session.reject();
+            } else {
+                // Key is real and so do some stuff
+                sendChannelLivePOST(streamKey, true);
             }
-            // Write a log with the headers of the stream
-            fs.writeFileSync(path.join(__dirname, 'video_database') + "/" + videoName + "-logs.txt", JSON.stringify(req.headers));
-            res.status(201).json({message: "Stream completed successfully"});
+        })
+        .catch((err) => {
+            console.error(err);
+            session.reject();
+        })
+
+    // INFO
+    // this is where the stream key verification should be
+    // also the path rerouting for the database
+    //console.log(session);
+    //console.log(session.publishStreamPath);
+    // let session = nms.getSession(id);
+    // session.reject();
+    generateStreamThumbnail(streamKey);
+});
+
+nms.on('postPublish', (id, streamPath, args) => {
+    let streamKey = getStreamKeyFromStreamPath(streamPath);
+    console.log('[NodeEvent on postPublish]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
+});
+
+nms.on('donePublish', (id, streamPath, args) => {
+    let streamKey = getStreamKeyFromStreamPath(streamPath);
+    console.log('[NodeEvent on donePublish]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
+    Util.makeVOD(streamKey)
+        .then(() => {
+            console.log("[NodeEvent on donePublish]", `id=${id}`, "VOD saved");
+            sendChannelLivePOST(streamKey, false);
         });
+});
+
+nms.on('prePlay', (id, streamPath, args) => {
+    console.log('[NodeEvent on prePlay]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
+    // let session = nms.getSession(id);
+    // session.reject();
+});
+
+nms.on('postPlay', (id, streamPath, args) => {
+    console.log('[NodeEvent on postPlay]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
+});
+
+nms.on('donePlay', (id, streamPath, args) => {
+    console.log('[NodeEvent on donePlay]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
+});
+
+let getStreamKeyFromStreamPath = (path) => {
+    let parts = path.split('/');
+    return parts[parts.length - 1];
+};
+
+const spawn = require('child_process').spawn,
+    cmd = config.trans.ffmpeg;
+
+const generateStreamThumbnail = (streamKey) => {
+    let args = [
+        '-y',
+        '-i', 'http://127.0.0.1:8000/live/'+streamKey+'/master.m3u8',
+        '-ss', '00:00:01',
+        '-vframes', '1',
+        '-vf', 'scale=-2:300',
+        config.http.mediaroot + "/live/" + streamKey + "/thumb.png",
+    ];
+
+    spawn(cmd, args, {
+        detached: true,
+        stdio: 'ignore'
+    }).unref();
+};
+
+/**
+ * @param {string} streamKey
+ * @return {Promise<Object>}
+ */
+let requestCheckStreamKeyExist = function (streamKey) {
+    return new Promise((resolve, reject) => {
+        let data = JSON.stringify({streamKey: streamKey});
+
+        let options = {
+            hostname: 'open-360-web-server',
+            port: 80,
+            path: '/auth/skc',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': data.length
+            }
+        }
+
+        let request = http.request(options, res => {
+            let body = '';
+
+            res.on('data', resp => {
+                body += resp;
+            });
+
+            res.on('end', () => {
+                //let resp = resp
+                resolve(JSON.parse(body));
+            });
+        });
+
+        request.on('error',err => {
+            console.log("Could not connect to the web server");
+            reject(err);
+        });
+
+        request.write(data);
+        request.end();
     });
-});
+}
 
-app.listen(PORT, function (){
-    // Check if video_database exists or make one
-    let databaseExists = fs.existsSync(path.join(__dirname, 'video_database'));
+let sendChannelLivePOST = function (streamKey, online) {
+    return new Promise((resolve, reject) => {
+        let data = JSON.stringify({streamKey: streamKey, online: online});
 
-    if (!databaseExists) { fs.mkdirSync(path.join(__dirname, 'video_database'))};
+        let options = {
+            hostname: 'open-360-web-server',
+            port: 80,
+            path: '/video/skso',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': data.length
+            }
+        }
 
-    console.info("Listening on: " + PORT);
-});
+        let request = http.request(options, res => {
+            let body = '';
+
+            res.on('data', resp => {
+                body += resp;
+            });
+
+            res.on('end', () => {
+                resolve(JSON.parse(body));
+            });
+        });
+
+        request.on('error',err => {
+            console.log("Could not connect to the web server");
+            reject(err);
+        });
+
+        request.write(data);
+        request.end();
+    });
+}

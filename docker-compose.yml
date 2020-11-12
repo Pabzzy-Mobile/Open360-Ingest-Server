@@ -1,0 +1,27 @@
+version: '3.5'
+
+services:
+  ingest:
+    build: .
+    container_name: open-360-ingest-server
+    environment:
+      - RTMPPORT=1935
+      - HTTPPORT=8000
+    ports:
+      - "8000:8000"
+      - "1935:1935"
+    #DEBUG VARIABLES
+    #  - "9229:9229"
+    #command:
+    #  - node
+    #  - "--inspect-brk=0.0.0.0"
+    #  - "main.js"
+    networks:
+      ingest-network:
+    volumes:
+      - "/usr/src/open360/video_database:/app/video_database"
+
+networks:
+  ingest-network:
+    external: true
+    name: "open360-ingest-network"

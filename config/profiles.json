@@ -1,0 +1,9 @@
+{
+  "version": 0.1,
+  "profiles": {
+    "FFmpeg-transcode-720p": {
+      "options": ["port","path","outfile"],
+      "command": "ffmpeg -i rtmp://localhost:{0}/{1} -c:v libx264 -x264opts keyint=60:no-scenecut -s 1280x720 -r 60 -b:v 3000 -profile:v main -preset veryfast -c:a aac -sws_flags bilinear -hls_list_size 6 {2}.m3u8"
+    }
+  }
+}
