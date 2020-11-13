@@ -47,21 +47,6 @@ nms.on('prePublish', (id, streamPath, args) => {
 
     let session = nms.getSession(id);
 
-    requestCheckStreamKeyExist(streamKey)
-        .then((resp) => {
-            let exists = resp.result;
-            console.log('[NodeEvent on prePublish]', "Stream Key: ", exists ? "authorized" : "rejected");
-            if (!exists){
-                session.reject();
-            } else {
-                // Key is real and so do some stuff
-                sendChannelLivePOST(streamKey, true);
-            }
-        })
-        .catch((err) => {
-            console.error(err);
-            session.reject();
-        })
 
     // INFO
     // this is where the stream key verification should be
@@ -70,7 +55,25 @@ nms.on('prePublish', (id, streamPath, args) => {
     //console.log(session.publishStreamPath);
     // let session = nms.getSession(id);
     // session.reject();
-    generateStreamThumbnail(streamKey);
+
+    requestCheckStreamKeyExist(streamKey)
+        .then((resp) => {
+            let exists = resp.result;
+            console.log('[NodeEvent on prePublish]', "Stream Key: ", exists ? "authorized" : "rejected");
+            if (!exists){
+                session.reject();
+            } else {
+                // Key is real and so do some stuff
+                sendChannelLivePOST(streamKey, true)
+                    .then(() => {
+                        generateStreamThumbnail(streamKey);
+                    });
+            }
+        })
+        .catch((err) => {
+            console.error(err);
+            session.reject();
+        })
 });
 
 nms.on('postPublish', (id, streamPath, args) => {
