@@ -6,6 +6,9 @@ const fs = require("fs");
 const config = require('./config/default.json');
 const {Util} = require("./core/");
 
+// Socket for connecting to the internal API
+const io = require("socket.io-client");
+
 let nms = new NodeMediaServer(config);
 
 fs.mkdir("./video_database/live", {recursive: true}, (err) => {
@@ -104,6 +107,32 @@ nms.on('postPlay', (id, streamPath, args) => {
 nms.on('donePlay', (id, streamPath, args) => {
     console.log('[NodeEvent on donePlay]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
 });
+
+// CONNECT TO THE INTERNAL API
+
+const socket = io("ws://open-360-api-sock:4000", {
+    reconnectionDelayMax: 10000,
+    query: {
+        name: "open360:ingest-api-server"
+    }
+});
+
+socket.on("connect", function (){
+    console.log("Connected to Internal API");
+    socket.emit("log",{log:"Connected to Internal API", type:"info"});
+});
+
+socket.on("ingest-api", (data) => {
+    if (data.type == "question"){
+        switch (data.package){
+            case "status":
+                socket.emit("api-message", {target: data.ack, ack: "ingest-api",type: "message", package: {status: "alive"}});
+                break;
+        }
+    }
+});
+
+// ------ END OF INTERNAL API RESPONSES
 
 let getStreamKeyFromStreamPath = (path) => {
     let parts = path.split('/');
