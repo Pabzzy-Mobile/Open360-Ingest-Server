@@ -18,6 +18,7 @@ services:
     #  - "main.js"
     networks:
       ingest-network:
+      api-network:
     volumes:
       - "/usr/src/open360/video_database:/app/video_database"
 
@@ -25,3 +26,6 @@ networks:
   ingest-network:
     external: true
     name: "open360-ingest-network"
+  api-network:
+    external: true
+    name: "open360-api-network"
