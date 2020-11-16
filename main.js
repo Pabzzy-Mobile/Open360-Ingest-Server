@@ -50,7 +50,6 @@ nms.on('prePublish', (id, streamPath, args) => {
 
     let session = nms.getSession(id);
 
-
     // INFO
     // this is where the stream key verification should be
     // also the path rerouting for the database
@@ -60,8 +59,7 @@ nms.on('prePublish', (id, streamPath, args) => {
     // session.reject();
 
     requestCheckStreamKeyExist(streamKey)
-        .then((resp) => {
-            let exists = resp.result;
+        .then((exists) => {
             console.log('[NodeEvent on prePublish]', "Stream Key: ", exists ? "authorized" : "rejected");
             if (!exists){
                 session.reject();
@@ -124,13 +122,39 @@ socket.on("connect", function (){
 
 socket.on("ingest-api", (data) => {
     if (data.type == "question"){
-        switch (data.package){
+        switch (data.package.prompt){
             case "status":
-                socket.emit("api-message", {target: data.ack, ack: "ingest-api",type: "message", package: {status: "alive"}});
+                socket.emit("api-message", {target: data.ack, ack: "ingest-api",type: "message", package: {prompt: "status-reply", status: "alive"}});
                 break;
         }
     }
 });
+
+/**
+ * @param {string} streamKey
+ * @return {Promise<boolean>}
+ */
+let requestCheckStreamKeyExist = function (streamKey) {
+    return new Promise((resolve, reject) => {
+        socket.emit("api-message", {target: "web-api", ack: "ingest-api",type: "question", package: {prompt: "checkKeyExists", streamKey: streamKey}});
+        socket.on("ingest-api", function (data) {
+            if (data.package.prompt == "checkKeyExists-reply")
+                resolve(data.package.result);
+        });
+    });
+}
+
+/**
+ * @param {string} streamKey
+ * @param {boolean} online
+ * @return {Promise<boolean>}
+ */
+let sendChannelLivePOST = function (streamKey, online) {
+    return new Promise((resolve) => {
+        socket.emit("api-message", {target: "web-api", ack: "ingest-api",type: "message", package: {prompt: "setOnline", online: online, streamKey: streamKey}});
+        resolve();
+    });
+}
 
 // ------ END OF INTERNAL API RESPONSES
 
@@ -157,82 +181,3 @@ const generateStreamThumbnail = (streamKey) => {
         stdio: 'ignore'
     }).unref();
 };
-
-/**
- * @param {string} streamKey
- * @return {Promise<Object>}
- */
-let requestCheckStreamKeyExist = function (streamKey) {
-    return new Promise((resolve, reject) => {
-        let data = JSON.stringify({streamKey: streamKey});
-
-        let options = {
-            hostname: 'open-360-web-server',
-            port: 80,
-            path: '/auth/skc',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': data.length
-            }
-        }
-
-        let request = http.request(options, res => {
-            let body = '';
-
-            res.on('data', resp => {
-                body += resp;
-            });
-
-            res.on('end', () => {
-                //let resp = resp
-                resolve(JSON.parse(body));
-            });
-        });
-
-        request.on('error',err => {
-            console.log("Could not connect to the web server");
-            reject(err);
-        });
-
-        request.write(data);
-        request.end();
-    });
-}
-
-let sendChannelLivePOST = function (streamKey, online) {
-    return new Promise((resolve, reject) => {
-        let data = JSON.stringify({streamKey: streamKey, online: online});
-
-        let options = {
-            hostname: 'open-360-web-server',
-            port: 80,
-            path: '/video/skso',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': data.length
-            }
-        }
-
-        let request = http.request(options, res => {
-            let body = '';
-
-            res.on('data', resp => {
-                body += resp;
-            });
-
-            res.on('end', () => {
-                resolve(JSON.parse(body));
-            });
-        });
-
-        request.on('error',err => {
-            console.log("Could not connect to the web server");
-            reject(err);
-        });
-
-        request.write(data);
-        request.end();
-    });
-}
