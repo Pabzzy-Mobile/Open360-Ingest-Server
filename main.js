@@ -124,7 +124,15 @@ socket.on("ingest-api", (data) => {
     if (data.type == "question"){
         switch (data.package.prompt){
             case "status":
-                socket.emit("api-message", {target: data.ack, ack: "ingest-api",type: "message", package: {prompt: "status-reply", status: "alive"}});
+                socket.emit("api-message", {
+                    target: data.ack,
+                    ack: "ingest-api",
+                    type: "message",
+                    package: {
+                        prompt: "status-reply",
+                        status: "alive"
+                    }
+                });
                 break;
         }
     }
@@ -136,10 +144,19 @@ socket.on("ingest-api", (data) => {
  */
 let requestCheckStreamKeyExist = function (streamKey) {
     return new Promise((resolve, reject) => {
-        socket.emit("api-message", {target: "web-api", ack: "ingest-api",type: "question", package: {prompt: "checkKeyExists", streamKey: streamKey}});
+        socket.emit("api-message", {
+            target: "web-api",
+            ack: "ingest-api",
+            type: "question",
+            package: {
+                prompt: "checkKeyExists",
+                data: {streamKey: streamKey},
+                message: "Checking Stream Key"
+            }
+        });
         socket.on("ingest-api", function (data) {
             if (data.package.prompt == "checkKeyExists-reply")
-                resolve(data.package.result);
+                resolve(data.package.data);
         });
     });
 }
@@ -151,7 +168,16 @@ let requestCheckStreamKeyExist = function (streamKey) {
  */
 let sendChannelLivePOST = function (streamKey, online) {
     return new Promise((resolve) => {
-        socket.emit("api-message", {target: "web-api", ack: "ingest-api",type: "message", package: {prompt: "setOnline", online: online, streamKey: streamKey}});
+        socket.emit("api-message", {
+            target: "web-api",
+            ack: "ingest-api",
+            type: "message",
+            package: {
+                prompt: "setOnline",
+                data: {online: online, streamKey: streamKey},
+                message: "Setting online status"
+            }
+        });
         resolve();
     });
 }
