@@ -19,6 +19,7 @@
   "homepage": "https://github.com/Pabzzy-Mobile/Open360-Ingest-Server#readme",
   "dependencies": {
     "node-media-server": "^2.2.4",
+    "redis": "^3.0.2",
     "socket.io-client": "^3.0.1"
   }
 }

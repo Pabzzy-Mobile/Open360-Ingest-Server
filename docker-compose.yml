@@ -19,10 +19,22 @@ services:
     networks:
       ingest-network:
       api-network:
+      ingest-memory:
     volumes:
       - "/usr/src/open360/video_database:/app/video_database"
 
+  ingest-redis:
+    image: redis
+    container_name: open360-redis-ingest
+    hostname: open360-redis-ingest
+    volumes:
+      - "/usr/src/open360/ingest_data:/data"
+      - "/usr/src/open360/redis.conf:/usr/local/etc/redis/redis.conf"
+    networks:
+      ingest-memory:
+
 networks:
+  ingest-memory:
   ingest-network:
     external: true
     name: "open360-ingest-network"

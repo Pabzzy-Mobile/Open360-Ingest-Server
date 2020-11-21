@@ -2,12 +2,21 @@ const NodeMediaServer = require('node-media-server');
 const http = require('http');
 const fs = require("fs");
 
+const redis = require('redis');
+// Create the database client
+let RedisClient = redis.createClient({
+    host: 'open360-redis-socket',
+    port: 6379
+});
+
+// Listen for any database errors
+RedisClient.on("error", function(error) {
+    console.error(error);
+});
+
 // Load the config
 const config = require('./config/default.json');
 const {Util} = require("./core/");
-
-// Socket for connecting to the internal API
-const io = require("socket.io-client");
 
 let nms = new NodeMediaServer(config);
 
@@ -24,9 +33,9 @@ nms.run();
 
 /*
 TODO LIST
-    - Unique Stream keys
-    - Verify Stream keys with the web server
-    - Shared Stream key database
+    - Unique Stream keys DONE
+    - Verify Stream keys with the web server DONE
+    - Shared Stream key database KINDA DONE
     - Fix thumbnails
  */
 
@@ -62,12 +71,19 @@ nms.on('prePublish', (id, streamPath, args) => {
         .then((exists) => {
             console.log('[NodeEvent on prePublish]', "Stream Key: ", exists ? "authorized" : "rejected");
             if (!exists){
+                // Key is not real so reject
                 session.reject();
             } else {
                 // Key is real and so do some stuff
+                // Send the signal that the server is live and ready
                 sendChannelLivePOST(streamKey, true)
                     .then(() => {
-                        generateStreamThumbnail(streamKey);
+                        // Create a thumbnail generator
+                        let thumbGenerationTask = setInterval(() => {
+                            generateStreamThumbnail(streamKey);
+                        }, 1800);
+                        // Remember the ID of the generator
+                        RedisClient.set(session.id + "thumbGeneratorTask", thumbGenerationTask);
                     });
             }
         })
@@ -85,11 +101,19 @@ nms.on('postPublish', (id, streamPath, args) => {
 nms.on('donePublish', (id, streamPath, args) => {
     let streamKey = getStreamKeyFromStreamPath(streamPath);
     console.log('[NodeEvent on donePublish]', `id=${id} streamPath=${streamPath} args=${JSON.stringify(args)}`);
-    Util.makeVOD(streamKey)
-        .then(() => {
-            console.log("[NodeEvent on donePublish]", `id=${id}`, "VOD saved");
-            sendChannelLivePOST(streamKey, false);
-        });
+    // Get the session id
+    let session = nms.getSession(id);
+    RedisClient.get(session.id + "thumbGeneratorTask", (err, taskID) => {
+        clearInterval(taskID);
+    });
+    // Set a task later to make the VOD mp4 of the stream and set the stream to offline
+    setTimeout(() => {
+        Util.makeVOD(streamKey)
+            .then(() => {
+                console.log("[NodeEvent on donePublish]", `id=${id}`, "VOD saved");
+                sendChannelLivePOST(streamKey, false);
+            })
+    },1000);
 });
 
 nms.on('prePlay', (id, streamPath, args) => {
@@ -107,6 +131,9 @@ nms.on('donePlay', (id, streamPath, args) => {
 });
 
 // CONNECT TO THE INTERNAL API
+
+// Socket for connecting to the internal API
+const io = require("socket.io-client");
 
 const socket = io("ws://open-360-api-sock:4000", {
     reconnectionDelayMax: 10000,
