@@ -16,7 +16,7 @@ RedisClient.on("error", function(error) {
 
 // Load the config
 const config = require('./config/default.json');
-const {Util} = require("./core/");
+const Util = require("open360-util");
 
 let nms = new NodeMediaServer(config);
 
@@ -108,7 +108,7 @@ nms.on('donePublish', (id, streamPath, args) => {
     });
     // Set a task later to make the VOD mp4 of the stream and set the stream to offline
     setTimeout(() => {
-        Util.makeVOD(streamKey)
+        Util.segmentation.makeVOD(streamKey)
             .then(() => {
                 console.log("[NodeEvent on donePublish]", `id=${id}`, "VOD saved");
                 sendChannelLivePOST(streamKey, false);
@@ -148,18 +148,14 @@ socket.on("connect", function (){
 });
 
 socket.on("ingest-api", (data) => {
-    if (data.type == "question"){
+    if (data.type == Util.api.APIMessageType.question){
         switch (data.package.prompt){
             case "status":
-                socket.emit("api-message", {
-                    target: data.ack,
-                    ack: "ingest-api",
-                    type: "message",
-                    package: {
-                        prompt: "status-reply",
-                        status: "alive"
-                    }
-                });
+                let pack = {
+                    prompt: "status-reply",
+                    status: "alive"
+                }
+                Util.api.sendMessage(socket, data.ack, "ingest-api", pack);
                 break;
         }
     }
@@ -171,16 +167,12 @@ socket.on("ingest-api", (data) => {
  */
 let requestCheckStreamKeyExist = function (streamKey) {
     return new Promise((resolve, reject) => {
-        socket.emit("api-message", {
-            target: "web-api",
-            ack: "ingest-api",
-            type: "question",
-            package: {
-                prompt: "checkKeyExists",
-                data: {streamKey: streamKey},
-                message: "Checking Stream Key"
-            }
-        });
+        let pack = {
+            prompt: "checkKeyExists",
+            data: {streamKey: streamKey},
+            message: "Checking Stream Key"
+        }
+        Util.api.sendQuestion(socket, "web-api", "ingest-api", pack);
         socket.on("ingest-api", function (data) {
             if (data.package.prompt == "checkKeyExists-reply")
                 resolve(data.package.data);
@@ -195,16 +187,12 @@ let requestCheckStreamKeyExist = function (streamKey) {
  */
 let sendChannelLivePOST = function (streamKey, online) {
     return new Promise((resolve) => {
-        socket.emit("api-message", {
-            target: "web-api",
-            ack: "ingest-api",
-            type: "message",
-            package: {
-                prompt: "setOnline",
-                data: {online: online, streamKey: streamKey},
-                message: "Setting online status"
-            }
-        });
+        let pack = {
+            prompt: "setOnline",
+            data: {online: online, streamKey: streamKey},
+            message: "Setting online status"
+        }
+        Util.api.sendMessage(socket, "web-api", "ingest-api", pack);
         resolve();
     });
 }
