@@ -5,7 +5,7 @@ const fs = require("fs");
 const redis = require('redis');
 // Create the database client
 let RedisClient = redis.createClient({
-    host: 'open360-redis-socket',
+    host: 'open360-redis-ingest',
     port: 6379
 });
 
